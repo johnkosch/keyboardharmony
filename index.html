@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Ear Training</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#f5f5f5; color:#222; }
+  main { max-width:760px; margin:0 auto; padding:40px 20px 50px; text-align:center; }
+  h1 { margin:0 0 28px; font-size:28px; font-weight:650; }
+  #solution { min-height:260px; display:flex; align-items:center; justify-content:center; margin:0 auto 24px; }
+  #solution .answer { font-size:34px; font-weight:650; line-height:1.35; }
+  .controls { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
+  button { border:0; border-radius:7px; padding:12px 22px; font-size:17px; cursor:pointer; background:#222; color:white; min-width:120px; }
+  button:hover { background:#444; }
+  .accessibility { margin:0 auto 16px; font-size:14px; color:#444; }
+  .accessibility label { display:inline-flex; align-items:center; gap:7px; cursor:pointer; }
+  .accessibility input { width:16px; height:16px; }
+  .sr-only {
+    position:absolute !important; width:1px !important; height:1px !important;
+    padding:0 !important; margin:-1px !important; overflow:hidden !important;
+    clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important;
+  }
+  button:disabled { opacity:.45; cursor:default; }
+  #next { display:none; }
+  #status { margin-top:18px; color:#666; font-size:14px; min-height:20px; }
+</style>
+</head>
+<body>
+<main id="app">
+  <h1>Music Ear Training</h1>
+  <div id="solution" aria-live="polite"></div>
+  <div class="accessibility">
+    <label>
+      <input type="checkbox" id="announceAnswers" checked>
+      Read answer aloud when revealed
+    </label>
+  </div>
+  <div class="controls">
+    <button id="reference" type="button">Sol Do</button>
+    <button id="play" type="button">Play</button>
+    <button id="reveal" type="button">Reveal Solution</button>
+    <button id="next" type="button">Next</button>
+  </div>
+  <div id="status"></div>
+  <div id="ttsAnnouncement" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+  <div id="screenReaderAnnouncement" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+</main>
+<script>
+(() => {
+  const exercises = [
+      { audio: 'major 1-4-1_1.mp3', solution: 'Major: I – IV – I' },
+      { audio: 'major 1-4-1_2.mp3', solution: 'Major: I – IV – I' },
+      { audio: 'major 1-4-1_3.mp3', solution: 'Major: I – IV – I' },
+      { audio: 'major 1-4-5_1.mp3', solution: 'Major: I – IV – V' },
+      { audio: 'major 1-4-5_2.mp3', solution: 'Major: I – IV – V' },
+      { audio: 'major 1-4-5_3.mp3', solution: 'Major: I – IV – V' },
+      { audio: 'major 1-5-1_1.mp3', solution: 'Major: I – V – I' },
+      { audio: 'major 1-5-1_2.mp3', solution: 'Major: I – V – I' },
+      { audio: 'major 1-5-1_3.mp3', solution: 'Major: I – V – I' },
+      { audio: 'major 4-1-5_1.mp3', solution: 'Major: IV – I – V' },
+      { audio: 'major 4-1-5_2.mp3', solution: 'Major: IV – I – V' },
+      { audio: 'major 4-1-5_3.mp3', solution: 'Major: IV – I – V' },
+      { audio: 'major 4-5-1_1.mp3', solution: 'Major: IV – V – I' },
+      { audio: 'major 4-5-1_2.mp3', solution: 'Major: IV – V – I' },
+      { audio: 'major 4-5-1_3.mp3', solution: 'Major: IV – V – I' },
+      { audio: 'minor 1-4-1_1.mp3', solution: 'Minor: i – iv – i' },
+      { audio: 'minor 1-4-1_2.mp3', solution: 'Minor: i – iv – i' },
+      { audio: 'minor 1-4-1_3.mp3', solution: 'Minor: i – iv – i' },
+      { audio: 'minor 1-4-5_1.mp3', solution: 'Minor: i – iv – V' },
+      { audio: 'minor 1-4-5_2.mp3', solution: 'Minor: i – iv – V' },
+      { audio: 'minor 1-4-5_3.mp3', solution: 'Minor: i – iv – V' },
+      { audio: 'minor 1-5-1_1.mp3', solution: 'Minor: i – V – i' },
+      { audio: 'minor 1-5-1_2.mp3', solution: 'Minor: i – V – i' },
+      { audio: 'minor 1-5-1_3.mp3', solution: 'Minor: i – V – i' },
+      { audio: 'minor 4-1-5_1.mp3', solution: 'Minor: iv – i – V' },
+      { audio: 'minor 4-1-5_2.mp3', solution: 'Minor: iv – i – V' },
+      { audio: 'minor 4-1-5_3.mp3', solution: 'Minor: iv – i – V' },
+      { audio: 'minor 4-5-1_1.mp3', solution: 'Minor: iv – V – i' },
+      { audio: 'minor 4-5-1_2.mp3', solution: 'Minor: iv – V – i' },
+      { audio: 'minor 4-5-1_3.mp3', solution: 'Minor: iv – V – i' }
+  ];
+
+  const playBtn = document.getElementById("play");
+  const revealBtn = document.getElementById("reveal");
+  const nextBtn = document.getElementById("next");
+  const solution = document.getElementById("solution");
+  const status = document.getElementById("status");
+  const announceAnswers = document.getElementById("announceAnswers");
+  const screenReaderAnnouncement = document.getElementById("screenReaderAnnouncement");
+
+  let current = -1;
+  let currentAudio = null;
+  let order = [];
+
+  function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+
+  function newOrder() { order = shuffle(exercises.map((_, i) => i)); }
+
+  function playCurrent() {
+    if (current < 0) return;
+    if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; }
+    const filename = exercises[order[current]].audio;
+    // Encode the filename so spaces and other characters work reliably as URLs.
+    const src = filename.split("/").map(encodeURIComponent).join("/");
+    currentAudio = new Audio();
+    currentAudio.preload = "auto";
+    currentAudio.src = src;
+    currentAudio.addEventListener("error", () => {
+      status.textContent = "Audio could not be loaded: " + filename;
+    }, { once: true });
+    currentAudio.play().catch((err) => {
+      status.textContent = "Click Play to hear the exercise.";
+    });
+  }
+
+  function loadExercise(index, autoPlay) {
+    if (index >= order.length) { newOrder(); index = 0; }
+    current = index;
+    solution.innerHTML = "";
+    revealBtn.style.display = "inline-block";
+    revealBtn.disabled = false;
+    nextBtn.style.display = "none";
+    status.textContent = "";
+    if (autoPlay) playCurrent();
+  }
+
+  playBtn.addEventListener("click", playCurrent);
+
+  revealBtn.addEventListener("click", () => {
+    if (current < 0) return;
+    const ex = exercises[order[current]];
+    solution.innerHTML = '<div class="answer">' + ex.solution + '</div>';
+    revealBtn.style.display = "none";
+    nextBtn.style.display = "inline-block";
+
+    if (announceAnswers && announceAnswers.checked) {
+      const exerciseFilename = exercises[order[current]].audio
+        .split("/")
+        .pop()
+        .split("_")[0]
+        .replace(/\.mp3$/i, "");
+      const spoken = "Solution revealed: " +
+        exerciseFilename.replace(/-/g, ", ");
+
+      // Give assistive technology a live-region announcement.
+      ttsAnnouncement.textContent = "";
+      setTimeout(() => {
+        ttsAnnouncement.textContent = spoken;
+      }, 50);
+
+      // Also use the browser's speech engine. This is what makes the answer
+      // audible even when the screen reader does not automatically announce
+      // live-region changes.
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(spoken);
+        utterance.rate = 0.95;
+        utterance.pitch = 1;
+        window.speechSynthesis.speak(utterance);
+      }
+    } else {
+      ttsAnnouncement.textContent = "";
+    }
+  });
+
+  nextBtn.addEventListener("click", () => loadExercise(current + 1, true));
+
+  // Browser-generated Sol–Do reference so no extra startup.mp3 file is required.
+  const referenceBtn = document.getElementById("reference");
+  referenceBtn.addEventListener("click", () => {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    const now = ctx.currentTime;
+    [[392.00, now], [523.25, now + 0.55]].forEach(([freq, start]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine"; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.45);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(start); osc.stop(start + 0.48);
+    });
+  });
+
+  newOrder();
+  loadExercise(0, false);
+})();
+</script>
+</body>
+</html>
